@@ -19,6 +19,7 @@
 //! The [`OrderedKv`](kv::OrderedKv) trait is the seam where a production engine
 //! (RocksDB with its internal WAL disabled) replaces the in-memory test backing.
 
+pub mod block;
 pub mod catalog;
 pub mod cdc;
 pub mod disclosure;

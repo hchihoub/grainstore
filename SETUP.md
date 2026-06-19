@@ -43,6 +43,7 @@ cargo fmt --check           # formatting (if rustfmt installed)
 | `tests/engine.rs` | **(P1)** `GrainEngine` facade: default HNSW, swapped-in brute-force, and the parallel sharded + worker-pool pipeline all return correct results through one API. |
 | `tests/planner.rs` | **(P2)** `query_planned` hits target recall across selectivities, adapting `over_fetch` (rare filters get more candidates). |
 | `tests/disclosure.rs` | **(P2)** Stage 0 summary costs fewer tokens than full; `drill` returns the full result from pinned state and matches a direct query; unknown handle → `None`. |
+| `block.rs` tests | **(P3)** Bloom has no false negatives; cluster-pruned kNN is exact vs brute force; point + category pruning correct. |
 | in-crate unit tests | key ordering, `seek_ge`, frame round-trip, torn-tail and CRC rejection, HLC monotonicity, embed round-trip, planner/catalog math. |
 
 ### Benchmarks
@@ -54,6 +55,7 @@ cargo run --release --example bench_build      # P1: parallel sharded build thro
 cargo run --release --example bench_live       # P1: full live pipeline (durable build + query)
 cargo run --release --example bench_planner    # P2: planner vs fixed over_fetch across selectivities
 cargo run --release --example bench_disclosure # P2: staged disclosure (token reduction + reuse)
+cargo run --release --example bench_blocks     # P3: self-describing block descriptor pruning
 ```
 
 ## Architecture of this slice

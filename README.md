@@ -27,12 +27,18 @@ passing tests and benchmarks.
   common ones stay cheap. **Staged disclosure** then returns a compact summary
   first (Stage 0) with a continuation handle; `drill` returns the full result from
   pinned state with no re-search.
+- **P3 — Self-describing blocks.** Grains group into meaning-clustered blocks,
+  each with a descriptor (centroid + radius, sid Bloom filter, predicate set,
+  confidence histogram, time range, category sketch). Queries read the descriptor
+  first and skip whole blocks without decoding the body; for kNN the
+  centroid+radius bound makes the pruning **exact**. ~99% of blocks pruned for
+  point lookups and exact kNN.
 
 Everything is behind traits, so implementations swap with no pipeline changes:
 
 | Seam | Default | Production swap |
 |------|---------|-----------------|
-| `OrderedKv` | in-memory map | RocksDB (internal WAL off; our WAL is truth) |
+| `OrderedKv` | in-memory map | RocksDB / self-describing blocks (`block.rs`) |
 | `VectorIndex` | `Hnsw` / `ShardedHnsw` | FAISS / DiskANN |
 | `Embedder` | `RawVectorEmbedder` | ONNX / remote model server |
 
@@ -45,7 +51,8 @@ batteries-included setup, `open_with(...)` to bring your own index/embedder.
 - CDC + worker-pool materializer (parallel index build, contiguous-prefix watermark)
 - Three index backends behind one trait: exact brute-force, HNSW, sharded HNSW
 - Recall-targeting planner + selectivity catalog; staged disclosure with continuations
-- 27 tests green · clippy + rustfmt clean · **zero runtime dependencies** in the core
+- Self-describing meaning-clustered blocks with exact descriptor-pruned kNN
+- 30 tests green · clippy + rustfmt clean · **zero runtime dependencies** in the core
 
 ## Benchmarks (1M vectors, dim 32, selectivity 0.10, k=10)
 
@@ -67,7 +74,7 @@ benchmark.
 ## Build & test
 
 ```sh
-cargo test                                     # 27 tests, no system deps
+cargo test                                     # 30 tests, no system deps
 cargo clippy --all-targets
 cargo run --release --example bench            # P0: write/read/recovery
 cargo run --release --example bench_p1         # P1: mixed near⋈filter vs over_fetch
@@ -75,6 +82,7 @@ cargo run --release --example bench_build      # parallel sharded build
 cargo run --release --example bench_live       # full live pipeline
 cargo run --release --example bench_planner     # P2: planner vs fixed over_fetch
 cargo run --release --example bench_disclosure  # P2: staged disclosure (tokens + reuse)
+cargo run --release --example bench_blocks      # P3: descriptor block pruning
 ```
 
 ## Honest scope
