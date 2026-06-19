@@ -21,6 +21,12 @@ passing tests and benchmarks.
   `near ⋈ select` query generates candidates from the vector plane, joins them
   back to the truth store by `sid`, applies an exact predicate, and ranks — all in
   one path.
+- **P2 — Token-cost planner.** Given a target recall, the planner estimates a
+  filter's selectivity (from a catalog kept on the write path) and picks
+  `over_fetch`/`ef` to hit it at minimum cost — rare filters get more candidates,
+  common ones stay cheap. **Staged disclosure** then returns a compact summary
+  first (Stage 0) with a continuation handle; `drill` returns the full result from
+  pinned state with no re-search.
 
 Everything is behind traits, so implementations swap with no pipeline changes:
 
@@ -38,7 +44,8 @@ batteries-included setup, `open_with(...)` to bring your own index/embedder.
 - Durable MVCC truth store with crash recovery (model-checked + crash-injection tests)
 - CDC + worker-pool materializer (parallel index build, contiguous-prefix watermark)
 - Three index backends behind one trait: exact brute-force, HNSW, sharded HNSW
-- 22 tests green · clippy + rustfmt clean · **zero runtime dependencies** in the core
+- Recall-targeting planner + selectivity catalog; staged disclosure with continuations
+- 27 tests green · clippy + rustfmt clean · **zero runtime dependencies** in the core
 
 ## Benchmarks (1M vectors, dim 32, selectivity 0.10, k=10)
 
@@ -60,12 +67,14 @@ benchmark.
 ## Build & test
 
 ```sh
-cargo test                                   # 22 tests, no system deps
+cargo test                                     # 27 tests, no system deps
 cargo clippy --all-targets
-cargo run --release --example bench          # P0: write/read/recovery
-cargo run --release --example bench_p1       # P1: mixed near⋈filter vs over_fetch
-cargo run --release --example bench_build    # parallel sharded build
-cargo run --release --example bench_live     # full live pipeline
+cargo run --release --example bench            # P0: write/read/recovery
+cargo run --release --example bench_p1         # P1: mixed near⋈filter vs over_fetch
+cargo run --release --example bench_build      # parallel sharded build
+cargo run --release --example bench_live       # full live pipeline
+cargo run --release --example bench_planner     # P2: planner vs fixed over_fetch
+cargo run --release --example bench_disclosure  # P2: staged disclosure (tokens + reuse)
 ```
 
 ## Honest scope

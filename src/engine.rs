@@ -18,10 +18,15 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::catalog::SelectivityCatalog;
+use crate::disclosure::{
+    build_summary, summary_tokens, ContinuationCache, ContinuationHandle, Stage, Staged,
+};
 use crate::embed::{encode_value_with_header, Embedder, RawVectorEmbedder};
 use crate::error::Result;
 use crate::materializer::VectorMaterializer;
 use crate::model::{Grain, Hlc, PredId, Sid};
+use crate::planner::{Filter, Plan, Planner};
 use crate::query::{near_join_select, MixedQuery, Ranked};
 use crate::truth::TruthStore;
 use crate::vector::{Hnsw, HnswConfig, VectorIndex};
@@ -99,6 +104,9 @@ pub struct GrainEngine {
     #[allow(dead_code)]
     embed: Arc<dyn Embedder>,
     mat: VectorMaterializer,
+    catalog: SelectivityCatalog,
+    planner: Planner,
+    continuations: ContinuationCache,
     cfg: EngineConfig,
 }
 
@@ -135,6 +143,9 @@ impl GrainEngine {
             index,
             embed,
             mat,
+            catalog: SelectivityCatalog::new(),
+            planner: Planner::new(),
+            continuations: ContinuationCache::new(4096),
             cfg,
         })
     }
@@ -150,6 +161,10 @@ impl GrainEngine {
     ) -> Result<Hlc> {
         debug_assert_eq!(header.len(), self.cfg.header_len, "header length mismatch");
         debug_assert_eq!(vector.len(), self.cfg.dim, "vector dim mismatch");
+        // Maintain selectivity stats on header byte 0 for the planner.
+        if let Some(&b0) = header.first() {
+            self.catalog.observe(b0);
+        }
         let value = encode_value_with_header(header, vector);
         self.truth
             .put(sid, pred, value, meta.c, meta.t_valid, meta.idem_key)
@@ -168,12 +183,91 @@ impl GrainEngine {
             .delete(sid, pred, meta.c, meta.t_valid, meta.idem_key)
     }
 
-    /// Run a mixed `near ⋈ select` query.
+    /// Run a mixed `near ⋈ select` query with explicit parameters.
     pub fn query<P>(&self, q: &MixedQuery<'_>, predicate: P) -> Result<Vec<Ranked>>
     where
         P: Fn(&Grain) -> bool,
     {
         near_join_select(self.truth.as_ref(), self.index.as_ref(), q, predicate)
+    }
+
+    /// Run a mixed query, letting the **planner** choose `over_fetch`/`ef` from
+    /// the filter's estimated selectivity to hit `target_recall` at minimum cost.
+    /// Returns the results and the [`Plan`] that produced them.
+    pub fn query_planned(
+        &self,
+        pred: PredId,
+        query: &[f32],
+        filter: &Filter,
+        k: usize,
+        target_recall: f64,
+    ) -> Result<(Vec<Ranked>, Plan)> {
+        // Estimate selectivity from the catalog where the filter supports it.
+        let sel = match filter {
+            Filter::Any => 1.0,
+            Filter::HeaderByteEq { offset: 0, value } => {
+                self.catalog.selectivity(*value).unwrap_or(0.5)
+            }
+            // Unknown structured predicate → conservative default.
+            Filter::HeaderByteEq { .. } => 0.5,
+        };
+        let plan = self.planner.plan(sel, k, target_recall);
+        let mq = MixedQuery {
+            pred,
+            query,
+            k,
+            ef: plan.ef,
+            over_fetch: plan.over_fetch,
+        };
+        let results = near_join_select(self.truth.as_ref(), self.index.as_ref(), &mq, |g| {
+            filter.eval(g)
+        })?;
+        Ok((results, plan))
+    }
+
+    /// Estimated selectivity of a header-byte-0 value (introspection).
+    pub fn selectivity(&self, value: u8) -> Option<f64> {
+        self.catalog.selectivity(value)
+    }
+
+    /// Run a planned mixed query and return **Stage 0** — a compact summary
+    /// (`reps` representatives + match count + sharpness) plus a continuation
+    /// handle. The expensive search runs once here; [`drill`](Self::drill)
+    /// returns the full result from the pinned state with no re-search.
+    pub fn query_staged(
+        &self,
+        pred: PredId,
+        query: &[f32],
+        filter: &Filter,
+        k: usize,
+        target_recall: f64,
+        reps: usize,
+    ) -> Result<Staged> {
+        let (ranked, _plan) = self.query_planned(pred, query, filter, k, target_recall)?;
+        let summary = build_summary(&ranked, reps);
+        let est0 = summary_tokens(&summary);
+        let full_tokens = summary.est_full_tokens;
+        let handle = self.continuations.store(ranked, full_tokens);
+        Ok(Staged {
+            stage_index: 0,
+            est_tokens: est0,
+            stage: Stage::Summary(summary),
+            continuation: Some(handle),
+        })
+    }
+
+    /// Drill a continuation to **Stage 1** — the full ranked grains — from pinned
+    /// state. Returns `None` if the handle has expired (evicted from the cache).
+    pub fn drill(&self, handle: ContinuationHandle) -> Result<Option<Staged>> {
+        Ok(self
+            .continuations
+            .get_full(handle)
+            .map(|(ranked, full_tokens)| Staged {
+                stage_index: 1,
+                est_tokens: full_tokens,
+                stage: Stage::Full(ranked),
+                continuation: None,
+            }))
     }
 
     /// Block until the vector index reflects commit `seq` (a bounded-staleness

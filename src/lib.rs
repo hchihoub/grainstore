@@ -19,7 +19,9 @@
 //! The [`OrderedKv`](kv::OrderedKv) trait is the seam where a production engine
 //! (RocksDB with its internal WAL disabled) replaces the in-memory test backing.
 
+pub mod catalog;
 pub mod cdc;
+pub mod disclosure;
 pub mod embed;
 pub mod engine;
 pub mod error;
@@ -28,16 +30,19 @@ pub mod keys;
 pub mod kv;
 pub mod materializer;
 pub mod model;
+pub mod planner;
 pub mod query;
 pub mod recovery;
 pub mod truth;
 pub mod vector;
 pub mod wal;
 
+pub use disclosure::{ContinuationHandle, Stage, Staged, Summary};
 pub use engine::{EngineConfig, GrainEngine, WriteMeta};
 pub use error::{Error, Result};
 pub use materializer::VectorMaterializer;
 pub use model::{Confidence, Grain, Hlc, PredId, Sid, Val};
+pub use planner::{Filter, Plan, Planner};
 pub use query::{near_join_select, MixedQuery, Ranked};
 pub use truth::TruthStore;
 pub use vector::{BruteForceIndex, Hnsw, HnswConfig, ShardedHnsw, VectorIndex};

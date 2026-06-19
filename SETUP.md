@@ -40,13 +40,20 @@ cargo fmt --check           # formatting (if rustfmt installed)
 | `tests/concurrency.rs` | Under 12 concurrent writers: one stored version per distinct `idem_key`, distinct commit timestamps, no timestamp shared by two keys; HLC uniqueness under threads. |
 | `tests/vector_recall.rs` | **(P1)** HNSW recall ≥ 0.90 vs the exact brute-force oracle; brute force is exact; HNSW soft-deletes are filtered from results. |
 | `tests/p1_pipeline.rs` | **(P1)** End-to-end truth → CDC → materialize → `near ⋈ select`: filtered mixed-query recall ≥ 0.85 vs an exact filtered-kNN oracle (predicate independent of geometry); tombstones remove from the index. |
-| in-crate unit tests | key ordering, `seek_ge`, frame round-trip, torn-tail and CRC rejection, HLC monotonicity, embed round-trip. |
+| `tests/engine.rs` | **(P1)** `GrainEngine` facade: default HNSW, swapped-in brute-force, and the parallel sharded + worker-pool pipeline all return correct results through one API. |
+| `tests/planner.rs` | **(P2)** `query_planned` hits target recall across selectivities, adapting `over_fetch` (rare filters get more candidates). |
+| `tests/disclosure.rs` | **(P2)** Stage 0 summary costs fewer tokens than full; `drill` returns the full result from pinned state and matches a direct query; unknown handle → `None`. |
+| in-crate unit tests | key ordering, `seek_ge`, frame round-trip, torn-tail and CRC rejection, HLC monotonicity, embed round-trip, planner/catalog math. |
 
 ### Benchmarks
 
 ```sh
-cargo run --release --example bench       # P0: write throughput, read latency, recovery
-cargo run --release --example bench_p1    # P1: mixed near⋈filter latency + recall vs over_fetch
+cargo run --release --example bench            # P0: write throughput, read latency, recovery
+cargo run --release --example bench_p1         # P1: mixed near⋈filter latency + recall vs over_fetch
+cargo run --release --example bench_build      # P1: parallel sharded build throughput
+cargo run --release --example bench_live       # P1: full live pipeline (durable build + query)
+cargo run --release --example bench_planner    # P2: planner vs fixed over_fetch across selectivities
+cargo run --release --example bench_disclosure # P2: staged disclosure (token reduction + reuse)
 ```
 
 ## Architecture of this slice
