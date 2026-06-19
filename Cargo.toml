@@ -1,0 +1,22 @@
+[package]
+name = "grainstore"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.81"
+license = "Apache-2.0"
+description = "P0 truth store for GrainStore: durable group-committed WAL + MVCC over an ordered-KV abstraction."
+
+[lib]
+name = "grainstore"
+path = "src/lib.rs"
+
+# P0 is intentionally dependency-free: the test build needs no RocksDB/FAISS
+# C++ toolchain. The OrderedKv trait is the seam where RocksDB plugs in for prod.
+[dependencies]
+
+[profile.test]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
