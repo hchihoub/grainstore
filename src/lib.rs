@@ -26,6 +26,7 @@ pub mod disclosure;
 pub mod embed;
 pub mod engine;
 pub mod error;
+pub mod governance;
 pub mod hlc;
 pub mod keys;
 pub mod kv;
@@ -41,6 +42,9 @@ pub mod wal;
 pub use disclosure::{ContinuationHandle, Stage, Staged, Summary};
 pub use engine::{EngineConfig, GrainEngine, WriteMeta};
 pub use error::{Error, Result};
+pub use governance::{
+    Action, AgentId, AuditRecord, Decision, GovernedEngine, Match, Policy, RuleSet,
+};
 pub use materializer::VectorMaterializer;
 pub use model::{Confidence, Grain, Hlc, PredId, Sid, Val};
 pub use planner::{Filter, Plan, Planner};

@@ -13,6 +13,8 @@ pub enum Error {
     Corrupt(String),
     /// The background committer is gone (shutdown or a prior fatal I/O error).
     Closed,
+    /// A governance policy denied the operation (ACL or budget).
+    Denied(String),
 }
 
 impl fmt::Display for Error {
@@ -21,6 +23,7 @@ impl fmt::Display for Error {
             Error::Io(e) => write!(f, "i/o error: {e}"),
             Error::Corrupt(m) => write!(f, "corrupt data: {m}"),
             Error::Closed => write!(f, "committer is closed"),
+            Error::Denied(m) => write!(f, "denied: {m}"),
         }
     }
 }

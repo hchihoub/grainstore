@@ -44,6 +44,7 @@ cargo fmt --check           # formatting (if rustfmt installed)
 | `tests/planner.rs` | **(P2)** `query_planned` hits target recall across selectivities, adapting `over_fetch` (rare filters get more candidates). |
 | `tests/disclosure.rs` | **(P2)** Stage 0 summary costs fewer tokens than full; `drill` returns the full result from pinned state and matches a direct query; unknown handle → `None`. |
 | `block.rs` tests | **(P3)** Bloom has no false negatives; cluster-pruned kNN is exact vs brute force; point + category pruning correct. |
+| `tests/governance.rs` | **(P4)** Unauthorized write never persists; reads denied/masked per policy; per-agent token budget is a hard ceiling; every op is audited. |
 | in-crate unit tests | key ordering, `seek_ge`, frame round-trip, torn-tail and CRC rejection, HLC monotonicity, embed round-trip, planner/catalog math. |
 
 ### Benchmarks

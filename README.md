@@ -33,6 +33,11 @@ passing tests and benchmarks.
   first and skip whole blocks without decoding the body; for kNN the
   centroid+radius bound makes the pruning **exact**. ~99% of blocks pruned for
   point lookups and exact kNN.
+- **P4 — Governance.** Identity, grain-level access control, value masking, a
+  per-agent token budget, and an audit trail — enforced **inline**. An agent holds
+  only a `GovernedEngine`; the `GrainEngine` is private, so there is no path to the
+  data that skips the policy check. Default-deny; every op (incl. denials) is
+  audited; the token budget is a hard ceiling debited by tokens returned.
 
 Everything is behind traits, so implementations swap with no pipeline changes:
 
@@ -41,6 +46,7 @@ Everything is behind traits, so implementations swap with no pipeline changes:
 | `OrderedKv` | in-memory map | RocksDB / self-describing blocks (`block.rs`) |
 | `VectorIndex` | `Hnsw` / `ShardedHnsw` | FAISS / DiskANN |
 | `Embedder` | `RawVectorEmbedder` | ONNX / remote model server |
+| `Policy` | `RuleSet` (default-deny) | OPA / attribute-based / directory |
 
 The `GrainEngine` facade wires it together: `GrainEngine::open(path, cfg)` for the
 batteries-included setup, `open_with(...)` to bring your own index/embedder.
@@ -52,7 +58,8 @@ batteries-included setup, `open_with(...)` to bring your own index/embedder.
 - Three index backends behind one trait: exact brute-force, HNSW, sharded HNSW
 - Recall-targeting planner + selectivity catalog; staged disclosure with continuations
 - Self-describing meaning-clustered blocks with exact descriptor-pruned kNN
-- 30 tests green · clippy + rustfmt clean · **zero runtime dependencies** in the core
+- Inline governance: identity, grain-level ACL, masking, per-agent token budget, audit
+- 32 tests green · clippy + rustfmt clean · **zero runtime dependencies** in the core
 
 ## Benchmarks (1M vectors, dim 32, selectivity 0.10, k=10)
 
@@ -74,7 +81,7 @@ benchmark.
 ## Build & test
 
 ```sh
-cargo test                                     # 30 tests, no system deps
+cargo test                                     # 32 tests, no system deps
 cargo clippy --all-targets
 cargo run --release --example bench            # P0: write/read/recovery
 cargo run --release --example bench_p1         # P1: mixed near⋈filter vs over_fetch
