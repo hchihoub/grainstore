@@ -25,6 +25,10 @@ pub trait OrderedKv: Send + Sync {
     /// Number of grain keys sharing `prefix`. Introspection / tests.
     fn prefix_count(&self, prefix: &[u8]) -> usize;
 
+    /// All `(key, value)` pairs in ascending key order. Used to rebuild derived
+    /// materializations (e.g. the vector index) from the truth on startup.
+    fn scan_all(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+
     /// Write a metadata key (e.g. the applied-sequence watermark).
     fn put_meta(&self, key: &[u8], value: Vec<u8>);
 
@@ -70,6 +74,11 @@ impl OrderedKv for MemKv {
         g.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
             .take_while(|(k, _)| k.starts_with(prefix))
             .count()
+    }
+
+    fn scan_all(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+        let g = self.grains.lock().expect("grains lock poisoned");
+        g.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 
     fn put_meta(&self, key: &[u8], value: Vec<u8>) {

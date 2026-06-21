@@ -92,6 +92,30 @@ cargo run --release --example bench_disclosure  # P2: staged disclosure (tokens 
 cargo run --release --example bench_blocks      # P3: descriptor block pruning
 ```
 
+## Run it as a standalone server
+
+The core is an embeddable library, but [`server/`](server/) packages it as a
+deployable service — like Postgres or a vector DB:
+
+| Binary | Role |
+|--------|------|
+| `grainstored` | server daemon (HTTP/JSON, concurrent, durable WAL) |
+| `grainstore` | CLI client (one-shot + REPL) — the `psql` equivalent |
+| `grainstore-mcp` | MCP server so AI agents use it as a tool |
+
+```sh
+cd server && cargo build --release
+./target/release/grainstored --port 7700 --data ~/.grainstore    # start the server
+./target/release/grainstore load sales.ndjson                     # load via the CLI
+./target/release/grainstore query "enterprise renewal" --min 100000
+./deploy/install.sh    # install binaries + a launchd/systemd service
+```
+
+Grains carry **text + a category + a numeric amount**, so queries combine semantic
+similarity, a category filter, and a numeric range in one `near ⋈ select`. Data is
+durable; the index rebuilds from the truth on restart. See
+[`server/README.md`](server/README.md).
+
 ## Honest scope
 
 This is a research engine, built to validate an architecture rather than to win

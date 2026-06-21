@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::cdc::{CdcPublisher, CdcRecord};
 use crate::error::Result;
 use crate::hlc::HlcOracle;
-use crate::keys::{grain_prefix, seek_target, t_tx_from_key};
+use crate::keys::{grain_prefix, seek_target, t_tx_from_key, KEY_LEN, PREFIX_LEN};
 use crate::kv::{MemKv, OrderedKv};
 use crate::model::{Confidence, Grain, Hlc, PredId, Sid, Val};
 use crate::recovery::recover;
@@ -124,6 +124,40 @@ impl TruthStore {
             }
             _ => Ok(None),
         }
+    }
+
+    /// Every currently-live grain (newest version per `(sid, pred)`, tombstones
+    /// excluded). Used to rebuild derived materializations from the truth.
+    pub fn scan_live(&self) -> Result<Vec<Grain>> {
+        let mut out = Vec::new();
+        let mut last_prefix: Option<Vec<u8>> = None;
+        for (k, v) in self.kv.scan_all() {
+            if k.len() < KEY_LEN {
+                continue;
+            }
+            let prefix = k[..PREFIX_LEN].to_vec();
+            // Keys are sorted; the first key of each prefix is the newest version.
+            if last_prefix.as_deref() == Some(prefix.as_slice()) {
+                continue;
+            }
+            last_prefix = Some(prefix);
+            let (op, c, t_valid, bytes) = decode_value(&v)?;
+            if op == 1 {
+                continue; // tombstone → no live grain
+            }
+            let sid = Sid(u128::from_be_bytes(k[0..16].try_into().expect("16 bytes")));
+            let pred = PredId(u32::from_be_bytes(k[16..20].try_into().expect("4 bytes")));
+            let t_tx = t_tx_from_key(&k).unwrap_or(Hlc(0));
+            out.push(Grain {
+                sid,
+                pred,
+                val: Val::Bytes(bytes),
+                c: Confidence(c),
+                t_valid: Hlc(t_valid),
+                t_tx,
+            });
+        }
+        Ok(out)
     }
 
     /// Current clock high-watermark (a valid "read latest" snapshot).

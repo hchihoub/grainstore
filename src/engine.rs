@@ -285,4 +285,22 @@ impl GrainEngine {
     pub fn index_len(&self) -> usize {
         self.index.len()
     }
+
+    /// Rebuild the vector index from the durable truth (e.g. on startup, since
+    /// the index is a derived materialization that does not persist). Embeds each
+    /// live grain with the configured embedder and inserts it. Returns the count.
+    pub fn rebuild_index_from_truth(&self) -> Result<usize> {
+        let mut n = 0;
+        for grain in self.truth.scan_live()? {
+            let bytes = match &grain.val {
+                crate::model::Val::Bytes(b) => b.as_slice(),
+                crate::model::Val::Tombstone => continue,
+            };
+            if let Some(v) = self.embed.embed(bytes) {
+                self.index.insert(grain.sid, &v);
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
 }

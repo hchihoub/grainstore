@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.grainstore.grainstored</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/.local/bin/grainstored</string>
+        <string>--port</string>
+        <string>7700</string>
+        <string>--data</string>
+        <string>__HOME__/.grainstore</string>
+        <string>--dim</string>
+        <string>64</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__HOME__/.grainstore/grainstored.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.grainstore/grainstored.err</string>
+</dict>
+</plist>

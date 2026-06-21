@@ -1,0 +1,15 @@
+[Unit]
+Description=GrainStore standalone server (grainstored)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/grainstored --port 7700 --data /var/lib/grainstore --dim 64
+Restart=on-failure
+RestartSec=2
+# Hardening (optional)
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
